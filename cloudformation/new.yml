@@ -1,0 +1,14 @@
+- PolicyName: Policy_api-lambda-S3
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:*"
+                  - "s3-object-lambda:*"
+                Resource:
+                  !Join
+                    - ''
+                    - - 'arn:aws:s3'
+                      - ':::'
+                      - !Ref S3BucketName

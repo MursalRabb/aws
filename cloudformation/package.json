@@ -1,0 +1,13 @@
+{
+  "name": "cloudformation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "package": "aws cloudformation package --template cloudformation.yml --s3-bucket mursal-cf-test --output-template-file template.packaged.yml",
+    "deploy": "aws cloudformation deploy --template-file template.packaged.yml --stack-name mursal-todo-cf --capabilities CAPABILITY_NAMED_IAM"
+  },
+  "author": "",
+  "license": "ISC"
+}

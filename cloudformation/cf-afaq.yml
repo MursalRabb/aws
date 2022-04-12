@@ -1,0 +1,127 @@
+---
+Description: Test cloud script to see how the cloud formation works, by creating a
+  dynamoDB table and a lmabda function to insert a row in it.
+Resources:
+  MyEmployeeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: EmployeeTable
+      AttributeDefinitions:
+      - AttributeName: EmpId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: EmpId
+        KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+  MyIAMRoleForLamda:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:CreateTable
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:UpdateTable
+            Resource:
+              !Join
+                - ''
+                - - 'arn:aws:dynamodb:'
+                  - !Ref AWS::Region
+                  - ":"
+                  - !Ref AWS::AccountId
+                  - ":table/"
+                  - !Ref MyEmployeeTable
+  MyIAMRoleForStateMachine:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - !Sub states.${AWS::Region}.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: StatesExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource: "*"
+  RowInsertAction:
+    Description: Lambda function to insert a row in dynamoDb table
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: insertRow
+      Runtime: nodejs14.x
+      Handler: writeRow.lambdaHandler
+      Role:
+        !GetAtt MyIAMRoleForLamda, Arn
+      Environment:
+        Variables:
+          TABLE:
+            !Ref MyEmployeeTable
+      Code: lambdas/
+  RowUpdateAction:
+    Description: Lambda function to update an inserted row in dynamoDb table
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: updateRow
+      Runtime: nodejs14.x
+      Handler: updateRow.lambdaHandler
+      Role:
+        !GetAtt
+        - MyIAMRoleForLamda
+        - Arn
+      Environment:
+        Variables:
+          TABLE:
+            !Ref MyEmployeeTable
+      Code: lambdas/
+  MyStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      DefinitionString:
+        !Sub
+          - |-
+            {
+              "Comment": "A state machine to check two lambdas working in series",
+              "StartAt": "firstLambda",
+              "States": {
+                "firstLambda": {
+                  "Type": "Task",
+                  "Resource": "${fistLambda}",
+                  "Next": "secondLambda" 
+                },
+                "secondLambda": {
+                  "Type": "Task",
+                  "Resource": "${secondLambda}",
+                  "End": true
+                }
+              }
+            }
+          - { firstLambda: !GetAtt RowInsertAction, Arn }
+          - { secondLambda: !GetAtt RowUpdateAction, Arn }
+      RoleArn:
+        GetAtt:
+        - MyIAMRoleForStateMachine
+        - Arn
